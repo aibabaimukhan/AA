@@ -102,7 +102,7 @@
     </div>
 
     <script>
-        let groups = [];
+       let groups = [];
         let activeGroupIndex = 0;
         let timerInterval;
 
@@ -150,8 +150,8 @@
         }
 
         function spawnPlanes() {
-            for (let i = 0; i < 20; i++) {
-                createPlane();
+            for (let i = 0; i < 25; i++) {
+                setTimeout(createPlane, i * 100);
             }
         }
 
@@ -159,11 +159,11 @@
             const plane = document.createElement('div');
             plane.className = 'plane';
             plane.innerHTML = '✈️';
-            plane.style.left = Math.random() * 90 + '%';
-            plane.style.top = Math.random() * 60 + '%';
+            // Начальная позиция случайна по всему экрану (кроме низа)
+            plane.style.left = Math.random() * 90 + 'vw';
+            plane.style.top = Math.random() * 60 + 'vh';
             
-            // Плавное парение
-            animatePlane(plane);
+            animateHover(plane);
 
             plane.onclick = function() {
                 collectPlane(this);
@@ -172,37 +172,59 @@
             document.getElementById('game-screen').appendChild(plane);
         }
 
-        function animatePlane(el) {
-            const x = (Math.random() - 0.5) * 100;
-            const y = (Math.random() - 0.5) * 100;
-            el.style.transform = `translate(${x}px, ${y}px) rotate(${x}deg)`;
-            setTimeout(() => { if(el.parentNode) animatePlane(el); }, 2000);
+        // Эффект легкого покачивания в воздухе
+        function animateHover(el) {
+            if (el.dataset.flying === "true") return; 
+            const x = (Math.random() - 0.5) * 50;
+            const y = (Math.random() - 0.5) * 50;
+            el.style.transform = `translate(${x}px, ${y}px)`;
+            el.style.transition = "transform 3s ease-in-out";
+            setTimeout(() => { if(el.parentNode) animateHover(el); }, 3000);
         }
 
         function collectPlane(planeEl) {
+            // Чтобы нельзя было кликнуть дважды во время полета
+            if (planeEl.dataset.flying === "true") return;
+            planeEl.dataset.flying = "true";
+
             const activeGroup = groups[activeGroupIndex];
-            if (activeGroup.timeLeft <= 0) return;
+            const targetEl = document.getElementById(`group-${activeGroupIndex}`);
+            const targetRect = targetEl.getBoundingClientRect();
+            const planeRect = planeEl.getBoundingClientRect();
 
-            activeGroup.score++;
-            document.getElementById(`score-${activeGroupIndex}`).innerText = `Поймано: ${activeGroup.score}`;
+            // Вычисляем вектор движения для разворота (необязательно, но красиво)
+            const deltaX = targetRect.left + (targetRect.width/2) - planeRect.left;
+            const deltaY = targetRect.top - planeRect.top;
+            const angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI);
 
-            // Анимация улета в группу
-            const target = document.getElementById(`group-${activeGroupIndex}`).getBoundingClientRect();
-            planeEl.style.transition = "all 0.6s power2.in";
-            planeEl.style.left = target.left + 'px';
-            planeEl.style.top = target.top + 'px';
-            planeEl.style.opacity = '0';
+            // Анимация полета
+            planeEl.style.transition = "all 0.8s cubic-bezier(0.5, -0.5, 1, 1)";
+            planeEl.style.left = (targetRect.left + targetRect.width / 2 - 20) + "px";
+            planeEl.style.top = (targetRect.top + 5) + "px";
+            planeEl.style.transform = `rotate(${angle + 90}deg) scale(0.2)`;
+            planeEl.style.opacity = "0.5";
 
             setTimeout(() => {
+                activeGroup.score++;
+                document.getElementById(`score-${activeGroupIndex}`).innerText = `Поймано: ${activeGroup.score}`;
+                
+                // Эффект «подпрыгивания» карточки при попадании
+                targetEl.style.transform = "scale(1.2)";
+                setTimeout(() => targetEl.style.transform = activeGroupIndex === groups.indexOf(activeGroup) ? "scale(1.1)" : "scale(1)", 100);
+
                 planeEl.remove();
-                createPlane(); // Создаем новый взамен
-            }, 600);
+                createPlane(); // Создаем новый
+            }, 800);
         }
 
         function switchGroup(index) {
-            document.querySelectorAll('.group-card').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.group-card').forEach((c, i) => {
+                c.classList.remove('active');
+                c.style.transform = "scale(1)";
+            });
             activeGroupIndex = index;
-            document.getElementById(`group-${index}`).classList.add('active');
+            const activeCard = document.getElementById(`group-${index}`);
+            activeCard.classList.add('active');
         }
 
         function startTimer() {
@@ -212,13 +234,12 @@
                     g.timeLeft--;
                     document.getElementById(`time-${activeGroupIndex}`).innerText = formatTime(g.timeLeft);
                 } else {
-                    // Если время вышло, ищем следующую группу с временем
                     const nextIndex = groups.findIndex(group => group.timeLeft > 0);
                     if (nextIndex !== -1) {
                         switchGroup(nextIndex);
                     } else {
                         clearInterval(timerInterval);
-                        alert("Игра окончена! Время всех групп вышло.");
+                        alert("Время вышло! Игра завершена.");
                     }
                 }
             }, 1000);
